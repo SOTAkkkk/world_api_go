@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -21,6 +23,7 @@ var city City
 
 func main() {
 	connectToDB()
+	makeSurver()
 }
 
 func connectToDB() {
@@ -67,6 +70,7 @@ func connectToDB() {
 		log.Println(city.id, city.name, city.countryCode, city.district, city.population)
 	}
 
+	// 1列のみ抽出
 	row := db.QueryRow("SELECT * FROM city WHERE id = ?", 1)
 	err = row.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
 
@@ -74,4 +78,20 @@ func connectToDB() {
 		panic(err.Error())
 	}
 	log.Println(city.id, city.name, city.countryCode, city.district, city.population)
+}
+
+type MyHandler struct{}
+
+func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello World!")
+}
+
+func makeSurver() {
+	handler := MyHandler{}
+	server := http.Server{
+		// Addr:    "127.0.0.1:8080",
+		Addr:    "localhost:8080",
+		Handler: &handler,
+	}
+	server.ListenAndServe()
 }
