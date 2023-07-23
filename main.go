@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,82 +13,70 @@ import (
 )
 
 type City struct {
-	id          string
-	name        string
-	countryCode string
-	district    string
-	population  int
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	CountryCode string `json:"countryCode"`
+	District    string `json:"district"`
+	Population  int    `json:"population"`
 }
 
-var city City
+var db *sql.DB
 
 func main() {
-	connectToDB()
-	getCityDataHandler()
+	// データベースの初期化
+	err := initDB()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cityHandler()
 }
 
-func connectToDB() {
+/*
+データベースの初期化
+*/
+func initDB() error {
 	err := godotenv.Load(".env")
 	if err != nil {
-		panic("Error loading .env file")
+		return err
 	}
+
+	/*
+		データベースの環境設定
+	*/
 	HOST := os.Getenv("HOST")
 	DBTable := os.Getenv("DB_TABLE")
 	DBUser := os.Getenv("DB_USER")
 	DBPass := os.Getenv("DB_PASS")
 	DBPort := os.Getenv("DB_PORT")
 
-	// データベースのハンドルを取得する
-	// db, err := sql.Open("mysql", "root:rootpass@tcp(localhost:13306)/world")
-	db, err := sql.Open("mysql", DBUser+":"+DBPass+"@tcp("+HOST+":"+DBPort+")/"+DBTable+"")
+	/*
+		データベースのハンドルを取得する
+	*/
+	db, err = sql.Open("mysql", DBUser+":"+DBPass+"@tcp("+HOST+":"+DBPort+")/"+DBTable+"")
 	if err != nil {
-		// ここではエラーを返さない
-		log.Fatal(err)
+		return err
 	}
-	defer db.Close()
 
-	// 実際に接続する
+	/*
+		データベースへの接続確認
+	*/
 	err = db.Ping()
 	if err != nil {
-		log.Fatal(err)
-	} else {
-		log.Println("データベース接続完了")
+		return err
 	}
 
-	//  | ID | Name | CountryCode | District | Population
-	// SQLの実行
-	rows, err := db.Query("SELECT * FROM city ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-
-	log.Println("全city情報リストを表示")
-	for rows.Next() {
-		err := rows.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
-		if err != nil {
-			panic(err.Error())
-		}
-		// log.Println(city.id, city.name, city.countryCode, city.district, city.population)
-	}
-
-	// 1列のみ抽出
-	// row := db.QueryRow("SELECT * FROM city WHERE id = ?", 1)
-	// err = row.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
-	// log.Println("id = 1 のcityのみ抽出")
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-	// log.Println(city.id, city.name, city.countryCode, city.district, city.population)
+	log.Println("データベース接続完了")
+	return nil
 }
 
-func getCityDataHandler() {
+func cityHandler() {
 	// マルチプレクサの初期化
 	mux := http.NewServeMux()
 
 	// ハンドラ関数とURLパスの登録
 	mux.HandleFunc("/", homeHandler)
-	mux.HandleFunc("/city", cityHandler)
+	mux.HandleFunc("/city", getCityHandler)
 
 	// マルチプレクサを使用してHTTPサーバーを立ち上げ
 	err := http.ListenAndServe(":8080", mux)
@@ -99,6 +88,41 @@ func getCityDataHandler() {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the Home Page!")
 }
-func cityHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, city.id, city.name, city.countryCode, city.district, city.population)
+
+func getCityHandler(w http.ResponseWriter, r *http.Request) {
+
+	/*
+		SELECTクエリの実行
+	*/
+	rows, err := db.Query("SELECT * FROM city ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	/*
+		City に 情報をセットする
+	*/
+	var result []City
+	for rows.Next() {
+		var city City
+		err := rows.Scan(&city.ID, &city.Name, &city.CountryCode, &city.District, &city.Population)
+		if err != nil {
+			http.Error(w, "Scan error", http.StatusInternalServerError)
+			return
+		}
+		result = append(result, city)
+	}
+
+	// JSON形式でレスポンスを返す
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+
+	defer db.Close()
+
 }
