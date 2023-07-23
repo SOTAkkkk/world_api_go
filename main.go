@@ -12,7 +12,7 @@ import (
 )
 
 type City struct {
-	id          int
+	id          string
 	name        string
 	countryCode string
 	district    string
@@ -23,7 +23,7 @@ var city City
 
 func main() {
 	connectToDB()
-	makeSurver()
+	getCityDataHandler()
 }
 
 func connectToDB() {
@@ -62,36 +62,43 @@ func connectToDB() {
 	}
 	defer rows.Close()
 
+	log.Println("全city情報リストを表示")
 	for rows.Next() {
 		err := rows.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
 		if err != nil {
 			panic(err.Error())
 		}
-		log.Println(city.id, city.name, city.countryCode, city.district, city.population)
+		// log.Println(city.id, city.name, city.countryCode, city.district, city.population)
 	}
 
 	// 1列のみ抽出
-	row := db.QueryRow("SELECT * FROM city WHERE id = ?", 1)
-	err = row.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
+	// row := db.QueryRow("SELECT * FROM city WHERE id = ?", 1)
+	// err = row.Scan(&city.id, &city.name, &city.countryCode, &city.district, &city.population)
+	// log.Println("id = 1 のcityのみ抽出")
+	// if err != nil {
+	// 	panic(err.Error())
+	// }
+	// log.Println(city.id, city.name, city.countryCode, city.district, city.population)
+}
 
+func getCityDataHandler() {
+	// マルチプレクサの初期化
+	mux := http.NewServeMux()
+
+	// ハンドラ関数とURLパスの登録
+	mux.HandleFunc("/", homeHandler)
+	mux.HandleFunc("/city", cityHandler)
+
+	// マルチプレクサを使用してHTTPサーバーを立ち上げ
+	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
-		panic(err.Error())
+		fmt.Println("サーバーを起動できませんでした。エラー:", err)
 	}
-	log.Println(city.id, city.name, city.countryCode, city.district, city.population)
 }
 
-type MyHandler struct{}
-
-func (h *MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello World!")
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Welcome to the Home Page!")
 }
-
-func makeSurver() {
-	handler := MyHandler{}
-	server := http.Server{
-		// Addr:    "127.0.0.1:8080",
-		Addr:    "localhost:8080",
-		Handler: &handler,
-	}
-	server.ListenAndServe()
+func cityHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, city.id, city.name, city.countryCode, city.district, city.population)
 }
